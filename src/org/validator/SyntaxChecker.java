@@ -240,7 +240,7 @@ public class SyntaxChecker {
     interface PluggablePolicy {
         ResultType validate();
 
-        void inject(StreamingValidator streamer);
+        void inject(final StreamingValidator streamer);
     }
 
     class BracePolicy implements PluggablePolicy {
@@ -248,7 +248,7 @@ public class SyntaxChecker {
         private StreamingValidator streamer;
 
         @Override
-        public void inject(StreamingValidator streamer) {
+        public void inject(final StreamingValidator streamer) {
             this.streamer = streamer;
         }
 
