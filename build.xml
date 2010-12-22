@@ -1,0 +1,161 @@
+<project name="simple-format-validator" basedir=".">
+	<property name="src.dir" value="${basedir}/src" />
+	<property name="test.dir" value="${basedir}/test" />
+	<property name="lib.dir" value="${basedir}/lib" />
+	<!--output.basedir is settable-->
+	<property name="output.basedir" value=".." />
+	<property name="output.dir" value="${output.basedir}/build-output" />
+	<property name="export.dir" value="${output.basedir}/export" />
+	<property name="testresults.dir" value="${output.basedir}/testresults" />
+
+	<patternset id="java.sources">
+		<include name="**/*.java" />
+		<exclude name="**/*Test*.java" />
+	</patternset>
+
+	<patternset id="junit.sources">
+		<include name="**/*Test*.class" />
+	</patternset>
+
+	<patternset id="java.classes">
+		<include name="**/*.class" />
+	</patternset>
+
+	<macrodef name="cleaner">
+		<attribute name="target" />
+		<attribute name="message" default="Cleaning @{target}" />
+		<sequential>
+			<echo message="@{message}" />
+			<delete dir="@{target}" includeEmptyDirs="true" />
+		</sequential>
+	</macrodef>
+
+	<macrodef name="builder">
+		<attribute name="source" />
+		<attribute name="target" default="${output.dir}" />
+		<attribute name="inclusions" default="*.java" />
+		<attribute name="exclusions" default="" />
+		<attribute name="message" default="Building @{source}" />
+		<attribute name="additional.path" default="" />
+		<attribute name="javac.version" default="1.6" />
+		<sequential>
+			<echo message="@{message}" />
+			<mkdir dir="@{target}" />
+			<!--<javac srcdir="@{source}" destdir="@{target}" debug="true" deprecation="true" source="@{javac.version}" fork="yes" executable="${javac.path}">-->
+			<javac srcdir="@{source}" destdir="@{target}" debug="true" deprecation="true" source="@{javac.version}" fork="yes">
+				<include name="@{inclusions}" />
+				<exclude name="@{exclusions}" />
+				<classpath>
+					<path refid="build.classpath" />
+					<pathelement path="@{additional.path}" />
+				</classpath>
+			</javac>
+		</sequential>
+	</macrodef>
+
+	<macrodef name="exporter">
+		<attribute name="source" />
+		<attribute name="inclusions" />
+		<attribute name="additional.file" default="" />
+		<attribute name="target" default="${export.dir}" />
+		<attribute name="jarname" />
+		<attribute name="message" default="Exporting @{jarname}" />
+		<sequential>
+			<echo message="@{message}" />
+			<mkdir dir="@{target}" />
+			<jar jarfile="@{target}/@{jarname}" compress="true" update="no">
+				<fileset dir="@{source}">
+					<include name="@{inclusions}" />
+				</fileset>
+				<fileset file="@{additional.file}" />
+			</jar>
+		</sequential>
+	</macrodef>
+
+	<macrodef name="junit.builder">
+		<attribute name="junit.destdir" />
+		<attribute name="junit.classpath" />
+		<attribute name="additional.path" default="" />
+		<attribute name="message" />
+		<element name="junit.tests" />
+		<sequential>
+			<echo message="@{message}" />
+			<mkdir dir="@{junit.destdir}" />
+			<junit printsummary="on" fork="yes" forkmode="once" haltonfailure="no" haltonerror="no" showoutput="true" timeout="120000">
+				<classpath>
+					<path refid="build.classpath" />
+					<pathelement location="@{junit.classpath}" />
+					<pathelement location="@{additional.path}" />
+				</classpath>
+				<formatter type="xml" />
+				<batchtest todir="@{junit.destdir}">
+					<junit.tests />
+				</batchtest>
+			</junit>
+		</sequential>
+	</macrodef>
+
+	<target name="init" description="Initialize All Libraries">
+		<echo message="Project: ${ant.project.name}" />
+		<property environment="env." />
+		<echo message="User: ${env.USERNAME}, Machine: ${env.COMPUTERNAME}, OS: ${os.name}" />
+		<echo message="Ant: ${ant.version}" />
+		<echo message="Java: ${java.vm.vendor} ${java.vm.name} ${java.runtime.version}" />
+
+		<tstamp>
+			<format property="system.date" pattern="MM/dd/yyyy hh:mm aa" />
+		</tstamp>
+		<echo message="Date: ${system.date}" />
+
+		<property name="env.CLASSPATH" value="" />
+		<fail message="Unset $CLASSPATH / %CLASSPATH% before running Ant because it can confuse Ant!">
+			<condition>
+				<not>
+					<equals arg1="${env.CLASSPATH}" arg2="" />
+				</not>
+			</condition>
+		</fail>
+
+		<mkdir dir="${output.dir}" />
+		<mkdir dir="${export.dir}" />
+		<path id="build.classpath">
+			<fileset dir="${lib.dir}">
+				<include name="junit-4.8.1.jar" />
+			</fileset>
+			<fileset dir="${export.dir}">
+				<include name="*.jar" />
+			</fileset>
+		</path>
+	</target>
+
+	<target name="compile" depends="init">
+		<builder source="${src.dir}/org/validator" target="${output.dir}" />
+		<builder source="${test.dir}/org/validator" target="${output.dir}" />
+	</target>
+
+	<target name="export" depends="export-compiled, export-src" />
+
+	<target name="export-compiled" depends="compile">
+		<exporter source="${output.dir}" inclusions="**/*.class" jarname="formatvalidator.jar" />
+	</target>
+
+	<target name="export-src">
+		<exporter source="${src.dir}" inclusions="**/*.java" jarname="formatvalidator-src.jar" />
+	</target>
+
+	<target name="clean">
+		<cleaner target="${output.dir}" />
+		<cleaner target="${export.dir}" />
+		<cleaner target="${testresults.dir}" />
+	</target>
+
+	<target name="unittest" depends="clean, export" description="Unit Test All UTIL">
+		<junit.builder junit.destdir="${testresults.dir}" junit.classpath="${export.dir}/formatvalidator.jar" additional.path="${properties.dir}" message="Running All format validator Tests">
+			<junit.tests>
+				<fileset dir="${output.dir}">
+					<patternset refid="junit.sources" />
+				</fileset>
+			</junit.tests>
+		</junit.builder>
+	</target>
+</project>
