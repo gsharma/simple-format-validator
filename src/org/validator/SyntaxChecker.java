@@ -98,12 +98,10 @@ public class SyntaxChecker {
         this.policies = policies;
     }
 
-    class StreamingValidator implements Runnable {
+    // Data streamer
+    final class StreamingValidator implements Runnable {
         // Fixed-size copy-buffer
         private final Vector<Character> memoryBuffer = new Vector<Character>();
-
-        private AtomicInteger validationsPerformed = new AtomicInteger();
-        private AtomicInteger lastTotalCharsValidated = new AtomicInteger();
         private volatile boolean stopRequested;
 
         void stop() {
@@ -125,10 +123,7 @@ public class SyntaxChecker {
             Result result = new Result();
             for (ValidationPolicy policy : policies) {
                 PluggablePolicy delegate = policy.getDelegate(this);
-                ResultType resultType = delegate.validate();
-                result.addResult(new PolicyResult(resultType,
-                        validationsPerformed.get(), lastTotalCharsValidated
-                                .get(), mode));
+                result.addResult(delegate.validate());
             }
 
             memoryBuffer.clear(); // purge buffer
@@ -143,7 +138,15 @@ public class SyntaxChecker {
             }
         }
 
-        private synchronized void stream() {
+        Vector<Character> getMemoryBuffer() {
+            return memoryBuffer;
+        }
+
+        StreamingMode getStreamingMode() {
+            return mode;
+        }
+
+        synchronized void stream() {
             switch (mode) {
             case STRING:
                 streamer.streamFromString();
@@ -237,70 +240,75 @@ public class SyntaxChecker {
         }
     }
 
-    interface PluggablePolicy {
-        ResultType validate();
+    abstract class PluggablePolicy {
+        protected AtomicInteger validationsPerformed = new AtomicInteger();
+        protected AtomicInteger lastTotalCharsValidated = new AtomicInteger();
 
-        void inject(final StreamingValidator streamer);
+        abstract PolicyResult validate();
+
+        abstract void inject(final StreamingValidator streamer);
     }
 
-    class BracePolicy implements PluggablePolicy {
+    final class BracePolicy extends PluggablePolicy {
         private final Stack<Character> stack = new Stack<Character>();
         private StreamingValidator streamer;
 
         @Override
-        public void inject(final StreamingValidator streamer) {
+        void inject(final StreamingValidator streamer) {
             this.streamer = streamer;
         }
 
         @Override
-        public synchronized ResultType validate() {
-            streamer.stream();
+        synchronized PolicyResult validate() {
+            streamer.stream(); // todo: better get a read-lock on streamer
 
-            ResultType result = ResultType.VALID;
-            if (!streamer.memoryBuffer.isEmpty()) {
-                try {
-                    streamer.validationsPerformed.incrementAndGet();
-                    for (Iterator<Character> iter = streamer.memoryBuffer
-                            .iterator(); iter.hasNext();) {
-                        char c = iter.next();
-                        try {
-                            switch (c) {
-                            case Braces.START_PAREN:
-                            case Braces.START_BRACE:
-                            case Braces.START_SQBRACE:
-                                stack.add(c);
-                                break;
-                            case Braces.END_PAREN:
-                                if (stack.pop() != Braces.START_PAREN) {
-                                    return ResultType.INVALID;
-                                }
-                                break;
-                            case Braces.END_BRACE:
-                                if (stack.pop() != Braces.START_BRACE) {
-                                    return ResultType.INVALID;
-                                }
-                                break;
-                            case Braces.END_SQBRACE:
-                                if (stack.pop() != Braces.START_SQBRACE) {
-                                    return ResultType.INVALID;
-                                }
-                                break;
+            ResultType resultType = ResultType.VALID;
+            if (!streamer.getMemoryBuffer().isEmpty()) {
+                validationsPerformed.incrementAndGet();
+                for (Iterator<Character> iter = streamer.getMemoryBuffer()
+                        .iterator(); iter.hasNext();) {
+                    char c = iter.next();
+                    lastTotalCharsValidated.incrementAndGet();
+                    try {
+                        switch (c) {
+                        case Braces.START_PAREN:
+                        case Braces.START_BRACE:
+                        case Braces.START_SQBRACE:
+                            stack.add(c);
+                            break;
+                        case Braces.END_PAREN:
+                            if (stack.pop() != Braces.START_PAREN) {
+                                return constructResultWrapper(ResultType.INVALID);
                             }
-                        } catch (EmptyStackException emptyStack) {
-                            return ResultType.INVALID;
+                            break;
+                        case Braces.END_BRACE:
+                            if (stack.pop() != Braces.START_BRACE) {
+                                return constructResultWrapper(ResultType.INVALID);
+                            }
+                            break;
+                        case Braces.END_SQBRACE:
+                            if (stack.pop() != Braces.START_SQBRACE) {
+                                return constructResultWrapper(ResultType.INVALID);
+                            }
+                            break;
                         }
+                    } catch (EmptyStackException emptyStack) {
+                        return constructResultWrapper(ResultType.INVALID);
                     }
+                }
 
-                    if (!stack.isEmpty()) {
-                        result = ResultType.INVALID;
-                    }
-                } finally {
-                    streamer.lastTotalCharsValidated.set(streamer.memoryBuffer
-                            .size());
+                if (!stack.isEmpty()) {
+                    resultType = ResultType.INVALID;
                 }
             }
 
-            return result;
+            return constructResultWrapper(resultType);
+        }
+
+        private synchronized PolicyResult constructResultWrapper(
+                final ResultType resultType) {
+            return new PolicyResult(resultType, validationsPerformed.get(),
+                    lastTotalCharsValidated.get(), streamer.getStreamingMode());
         }
 
         private final class Braces {
@@ -331,14 +339,16 @@ public class SyntaxChecker {
         }
     }
 
+    // Immutable per-policy result container
     public final class PolicyResult {
-        private int validationsPerformed;
-        private int totalCharactersValidated;
-        private ResultType resultType;
-        private StreamingMode mode;
+        private final int validationsPerformed;
+        private final int totalCharactersValidated;
+        private final ResultType resultType;
+        private final StreamingMode mode;
 
-        public PolicyResult(ResultType resultType, int validationsPerformed,
-                int totalCharactersValidated, StreamingMode mode) {
+        public PolicyResult(final ResultType resultType,
+                final int validationsPerformed,
+                final int totalCharactersValidated, final StreamingMode mode) {
             this.resultType = resultType;
             this.validationsPerformed = validationsPerformed;
             this.totalCharactersValidated = totalCharactersValidated;

@@ -20,7 +20,10 @@ public class SyntaxCheckerTest {
         assertEquals(State.INITIALIZING, validator.getState());
         Result result = validator.validateNow();
         assertEquals(State.PROCESSING, validator.getState());
-        assertTrue(result.getDetailedResults()[0].getResultType() == ResultType.VALID);
+        assertEquals(ResultType.VALID, result.getDetailedResults()[0]
+                .getResultType());
+        assertEquals(8, result.getDetailedResults()[0]
+                .getTotalCharactersValidated());
         System.out.println(result);
         validator.stopNow();
         assertEquals(State.STOPPED, validator.getState());
@@ -30,7 +33,10 @@ public class SyntaxCheckerTest {
         assertEquals(State.INITIALIZING, validator.getState());
         result = validator.validateNow();
         assertEquals(State.PROCESSING, validator.getState());
-        assertTrue(result.getDetailedResults()[0].getResultType() == ResultType.INVALID);
+        assertEquals(ResultType.INVALID, result.getDetailedResults()[0]
+                .getResultType());
+        assertEquals(7, result.getDetailedResults()[0]
+                .getTotalCharactersValidated());
         System.out.println(result);
         validator.stopNow();
         assertEquals(State.STOPPED, validator.getState());
@@ -41,7 +47,10 @@ public class SyntaxCheckerTest {
         assertEquals(State.INITIALIZING, validator.getState());
         result = validator.validateNow();
         assertEquals(State.PROCESSING, validator.getState());
-        assertTrue(result.getDetailedResults()[0].getResultType() == ResultType.VALID);
+        assertEquals(ResultType.VALID, result.getDetailedResults()[0]
+                .getResultType());
+        assertEquals(36, result.getDetailedResults()[0]
+                .getTotalCharactersValidated());
         System.out.println(result);
         validator.stopNow();
         assertEquals(State.STOPPED, validator.getState());
@@ -50,7 +59,10 @@ public class SyntaxCheckerTest {
                 new ValidationPolicy[] { ValidationPolicy.BRACE }, ")(({[]})");
         result = validator.validateNow();
         assertEquals(State.PROCESSING, validator.getState());
-        assertTrue(result.getDetailedResults()[0].getResultType() == ResultType.INVALID);
+        assertEquals(ResultType.INVALID, result.getDetailedResults()[0]
+                .getResultType());
+        assertEquals(1, result.getDetailedResults()[0]
+                .getTotalCharactersValidated());
         System.out.println(result);
         validator.stopNow();
         assertEquals(State.STOPPED, validator.getState());
@@ -60,7 +72,10 @@ public class SyntaxCheckerTest {
         assertEquals(State.INITIALIZING, validator.getState());
         result = validator.validateNow();
         assertEquals(State.PROCESSING, validator.getState());
-        assertTrue(result.getDetailedResults()[0].getResultType() == ResultType.INVALID);
+        assertEquals(ResultType.INVALID, result.getDetailedResults()[0]
+                .getResultType());
+        assertEquals(9, result.getDetailedResults()[0]
+                .getTotalCharactersValidated());
         System.out.println(result);
         validator.stopNow();
         assertEquals(State.STOPPED, validator.getState());
@@ -77,7 +92,8 @@ public class SyntaxCheckerTest {
         assertEquals(State.PROCESSING, validator.getState());
         validator.stopNow();
         assertEquals(State.STOPPED, validator.getState());
-        assertTrue(result.getDetailedResults()[0].getResultType() == ResultType.VALID);
+        assertEquals(ResultType.VALID, result.getDetailedResults()[0]
+                .getResultType());
         System.out.println(result);
 
         // sleep to make a bad change to source file
@@ -103,7 +119,10 @@ public class SyntaxCheckerTest {
         validator.stopNow();
         assertEquals(State.STOPPED, validator.getState());
 
-        assertTrue(result.getDetailedResults()[0].getResultType() == ResultType.VALID);
+        assertEquals(ResultType.VALID, result.getDetailedResults()[0]
+                .getResultType());
+        assertEquals(36, result.getDetailedResults()[0]
+                .getTotalCharactersValidated());
         System.out.println(result);
     }
 }
